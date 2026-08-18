@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calcolatore RAL → Netto 2026</title>
+<style>
+  /* Design system della pagina: un accento blu, superfici bianche elevate
+     su fondo freddo, numeri tabulari ovunque compaiano importi. */
+  :root {
+    --inchiostro: #101725;
+    --grigio: #64748b;
+    --grigio-chiaro: #94a3b8;
+    --linea: #e6e9ef;
+    --accento: #2749d6;
+    --accento-tenue: #eef2ff;
+    --sfondo: #f5f6fa;
+    --sfondo-riga: #f8f9fc;
+    --rosso: #b42332;
+    --verde: #0b7a55;
+    --ombra: 0 1px 2px rgba(16, 23, 37, .05), 0 12px 32px -14px rgba(16, 23, 37, .14);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI Variable Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--inchiostro);
+    background:
+      radial-gradient(60rem 22rem at 50% -6rem, #e2e8fd 0%, rgba(226, 232, 253, 0) 70%),
+      var(--sfondo);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  main {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 3rem 1.25rem 4.5rem;
+  }
+  h1 { font-size: 1.7rem; letter-spacing: -.02em; margin: 0 0 .3rem; }
+  .sottotitolo { color: var(--grigio); margin: 0 0 1.75rem; font-size: .95rem; }
+
+  .scheda {
+    background: #fff;
+    border: 1px solid var(--linea);
+    border-radius: 14px;
+    padding: 1.6rem 1.75rem;
+    margin-bottom: 1.4rem;
+    box-shadow: var(--ombra);
+  }
+
+  form .campi {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 1.5rem;
+    align-items: flex-end;
+  }
+  label {
+    display: block;
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--grigio);
+    margin-bottom: .35rem;
+  }
+  input[type="number"], input[type="text"] {
+    font: inherit;
+    color: inherit;
+    padding: .55rem .75rem;
+    border: 1px solid #d3d9e3;
+    border-radius: 9px;
+    background: #fff;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  input[type="number"] { width: 11rem; font-variant-numeric: tabular-nums; }
+  input[type="number"]:focus {
+    outline: none;
+    border-color: var(--accento);
+    box-shadow: 0 0 0 3px rgba(39, 73, 214, .14);
+  }
+  .didascalia-profilo {
+    font-size: .7rem;
+    font-weight: 600;
+    color: var(--grigio-chiaro);
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    margin: 1.4rem 0 .6rem;
+    padding-top: 1.2rem;
+    border-top: 1px solid var(--linea);
+  }
+  /* I campi del profilo hanno l'aspetto di input normali ma sono bloccati:
+     readonly (niente grigio da disabled) e nessun focus da tastiera. */
+  input[readonly] { cursor: default; field-sizing: content; }
+  input[readonly]:focus { outline: none; box-shadow: none; border-color: #d3d9e3; }
+
+  button {
+    font: inherit;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(180deg, #3457ea, var(--accento));
+    border: none;
+    border-radius: 9px;
+    padding: .6rem 1.6rem;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(16, 23, 37, .25), inset 0 1px 0 rgba(255, 255, 255, .18);
+    transition: filter .15s ease, transform .05s ease;
+  }
+  button:hover { filter: brightness(1.08); }
+  button:active { transform: translateY(1px); }
+  button:focus-visible { outline: 3px solid rgba(39, 73, 214, .35); outline-offset: 2px; }
+
+  .risultati-principali {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  .risultati-principali .etichetta {
+    font-size: .74rem;
+    font-weight: 600;
+    color: var(--grigio);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+  .risultati-principali .valore {
+    font-size: 2.2rem;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums;
+    color: var(--accento);
+  }
+  .risultati-principali .valore-secondario {
+    font-size: 1.35rem;
+    color: var(--inchiostro);
+  }
+  .mensili { display: flex; flex-wrap: wrap; gap: .75rem 2.25rem; margin-top: .45rem; }
+  .mensili .etichetta { font-size: .68rem; color: var(--grigio-chiaro); margin-bottom: .1rem; }
+
+  .contenitore-tabella { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: .93rem; }
+  th, td {
+    padding: .5rem .65rem;
+    text-align: right;
+    border-bottom: 1px solid var(--linea);
+    font-variant-numeric: tabular-nums;
+  }
+  th:first-child, td:first-child { text-align: left; }
+  thead th {
+    font-size: .7rem;
+    color: var(--grigio-chiaro);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tr.pietra-miliare td { font-weight: 700; background: var(--accento-tenue); }
+  tr.dettaglio td { color: var(--grigio); font-size: .9rem; }
+  tr.dettaglio td:first-child { padding-left: 1.7rem; }
+  td.negativo { color: var(--rosso); }
+  td.positivo { color: var(--verde); }
+
+  #errore { color: var(--rosso); font-size: .9rem; margin-top: .6rem; display: none; }
+
+  @media (max-width: 560px) {
+    main { padding-top: 2rem; }
+    .scheda { padding: 1.2rem 1.25rem; }
+    .risultati-principali .valore { font-size: 1.9rem; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Calcolatore RAL → Netto</h1>
+  <p class="sottotitolo">
+    Prototipo — perimetro e fonti nel README.
+  </p>
+
+  <div class="scheda">
+    <form id="modulo">
+      <div class="campi">
+        <div>
+          <label for="ral">RAL (€ lordi annui)</label>
+          <input type="number" id="ral" min="1" step="any" placeholder="0" required>
+        </div>
+        <button type="submit">Calcola</button>
+      </div>
+      <p id="errore"></p>
+
+      <!-- Parametri fissi del prototipo: dichiarati in vista, ma non
+           modificabili (il perimetro completo è nel README). -->
+      <p class="didascalia-profilo">Profilo di calcolo — fisso in questo prototipo</p>
+      <div class="campi">
+        <div>
+          <label for="profilo-anno">Anno d'imposta</label>
+          <input type="text" id="profilo-anno" value="2026" size="6" readonly tabindex="-1">
+        </div>
+        <div>
+          <label for="profilo-contratto">Contratto</label>
+          <input type="text" id="profilo-contratto" value="Dipendente privato, indeterminato" size="34" readonly tabindex="-1">
+        </div>
+        <div>
+          <label for="profilo-orario">Orario e periodo</label>
+          <input type="text" id="profilo-orario" value="Full time, anno intero" size="23" readonly tabindex="-1">
+        </div>
+        <div>
+          <label for="profilo-territorio">Territorio</label>
+          <input type="text" id="profilo-territorio" value="Milano" size="8" readonly tabindex="-1">
+        </div>
+        <div>
+          <label for="profilo-carichi">Carichi e oneri</label>
+          <input type="text" id="profilo-carichi" value="Nessuno" size="8" readonly tabindex="-1">
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="scheda" id="risultati" hidden>
+    <div class="risultati-principali">
+      <div>
+        <div class="etichetta">Netto annuo</div>
+        <div class="valore" id="netto-annuo"></div>
+      </div>
+      <div>
+        <div class="etichetta">Netto mensile</div>
+        <div class="mensili">
+          <div>
+            <div class="etichetta">12 mensilità</div>
+            <div class="valore valore-secondario" id="mensile-12"></div>
+          </div>
+          <div>
+            <div class="etichetta">13 mensilità</div>
+            <div class="valore valore-secondario" id="mensile-13"></div>
+          </div>
+          <div>
+            <div class="etichetta">14 mensilità</div>
+            <div class="valore valore-secondario" id="mensile-14"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="contenitore-tabella">
+      <table>
+        <thead>
+          <tr><th>Voce</th><th>Importo</th><th>% su RAL</th></tr>
+        </thead>
+        <tbody id="corpo-tabella"></tbody>
+      </table>
+    </div>
+
+  </div>
+</main>
+
+<!-- Script classici, nessun modulo ES: la pagina funziona anche aperta da file:// -->
+<script src="parametri-2026.js"></script>
+<script src="calcolo.js"></script>
+<script>
+  /* Solo collegamento tra form, calcolo e tabella: la logica sta in calcolo.js. */
+  (function () {
+    "use strict";
+
+    var formattaEuro = new Intl.NumberFormat("it-IT", {
+      style: "currency", currency: "EUR"
+    }).format;
+
+    function percentualeSuRal(importo, ral) {
+      return (importo / ral * 100).toFixed(1).replace(".", ",") + "%";
+    }
+
+    function riga(voce, importo, ral, opzioni) {
+      // opzioni.tipo: "pietra-miliare" | "dettaglio" | "" — solo stile;
+      // opzioni.segno: "-" | "+" — colore e segno davanti all'importo.
+      opzioni = opzioni || {};
+      var tr = document.createElement("tr");
+      if (opzioni.tipo) tr.className = opzioni.tipo;
+
+      var tdVoce = document.createElement("td");
+      tdVoce.textContent = voce;
+
+      var tdImporto = document.createElement("td");
+      var prefisso = "";
+      if (opzioni.segno === "-" && importo > 0) { prefisso = "− "; tdImporto.className = "negativo"; }
+      if (opzioni.segno === "+" && importo > 0) { prefisso = "+ "; tdImporto.className = "positivo"; }
+      tdImporto.textContent = prefisso + formattaEuro(importo);
+
+      var tdPercentuale = document.createElement("td");
+      tdPercentuale.textContent = percentualeSuRal(importo, ral);
+
+      tr.appendChild(tdVoce);
+      tr.appendChild(tdImporto);
+      tr.appendChild(tdPercentuale);
+      return tr;
+    }
+
+    document.getElementById("modulo").addEventListener("submit", function (evento) {
+      evento.preventDefault();
+
+      var errore = document.getElementById("errore");
+      errore.style.display = "none";
+
+      var ral = parseFloat(document.getElementById("ral").value);
+      if (!isFinite(ral) || ral <= 0) {
+        errore.textContent = "Inserisci una RAL positiva.";
+        errore.style.display = "block";
+        return;
+      }
+
+      // L'interfaccia usa solo Milano; il modello resta parametrizzato
+      // (vedi PARAMETRI_2026.TERRITORI e la sezione Estendibilità del README).
+      var territorio = "milano";
+      var r = calcolaNetto(ral, territorio, PARAMETRI_2026);
+
+      document.getElementById("netto-annuo").textContent = formattaEuro(r.nettoAnnuo);
+      [12, 13, 14].forEach(function (mensilita) {
+        document.getElementById("mensile-" + mensilita).textContent =
+          formattaEuro(r.nettoAnnuo / mensilita);
+      });
+
+      var corpo = document.getElementById("corpo-tabella");
+      corpo.textContent = "";
+      corpo.appendChild(riga("RAL lorda", r.ral, ral, { tipo: "pietra-miliare" }));
+      corpo.appendChild(riga("Contributi INPS (9,19% + eventuale 1%)", r.contributi.totale, ral, { segno: "-" }));
+      corpo.appendChild(riga("Imponibile fiscale", r.imponibile, ral, { tipo: "pietra-miliare" }));
+      corpo.appendChild(riga("IRPEF lorda", r.irpefLorda, ral, { tipo: "dettaglio" }));
+      corpo.appendChild(riga("Detrazione lavoro dipendente", r.detrazioneLavoro, ral, { tipo: "dettaglio" }));
+      corpo.appendChild(riga("Ulteriore detrazione (cuneo)", r.ulterioreDetrazione, ral, { tipo: "dettaglio" }));
+      corpo.appendChild(riga("IRPEF netta", r.irpefNetta, ral, { segno: "-" }));
+      corpo.appendChild(riga("Addizionale regionale (" + PARAMETRI_2026.TERRITORI[territorio].regione + ")", r.addizionaleRegionale, ral, { segno: "-" }));
+      corpo.appendChild(riga("Addizionale comunale (" + r.territorio + ")", r.addizionaleComunale, ral, { segno: "-" }));
+      corpo.appendChild(riga("Somma esente (cuneo)", r.sommaEsente, ral, { segno: "+" }));
+      corpo.appendChild(riga("Trattamento integrativo", r.trattamentoIntegrativo, ral, { segno: "+" }));
+      corpo.appendChild(riga("Totale trattenute", r.totaleTrattenute, ral));
+      corpo.appendChild(riga("Netto annuo", r.nettoAnnuo, ral, { tipo: "pietra-miliare" }));
+      [12, 13, 14].forEach(function (mensilita) {
+        corpo.appendChild(riga("Netto mensile (" + mensilita + " mensilità)",
+          r.nettoAnnuo / mensilita, ral));
+      });
+
+      document.getElementById("risultati").hidden = false;
+    });
+  })();
+</script>
+</body>
+</html>
