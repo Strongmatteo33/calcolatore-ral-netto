@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Calcolatore RAL → Netto 2026</title>
+<meta name="description" content="Calcolatore RAL → netto per lavoratori dipendenti in Italia, anno d'imposta 2026: IRPEF, contributi, cuneo fiscale, addizionali di tutte le regioni e dei capoluoghi, carichi familiari. Parametri con fonte, nessuna dipendenza.">
 <style>
   /* Design system della pagina: un accento blu, superfici bianche elevate
      su fondo freddo, numeri tabulari ovunque compaiano importi. */
@@ -38,6 +39,7 @@
   }
   h1 { font-size: 1.7rem; letter-spacing: -.02em; margin: 0 0 .3rem; }
   .sottotitolo { color: var(--grigio); margin: 0 0 1.75rem; font-size: .95rem; }
+  .sottotitolo a { color: inherit; }
 
   .scheda {
     background: #fff;
@@ -61,7 +63,7 @@
     color: var(--grigio);
     margin-bottom: .35rem;
   }
-  input[type="number"], input[type="text"] {
+  input[type="number"], input[type="text"], select {
     font: inherit;
     color: inherit;
     padding: .55rem .75rem;
@@ -71,7 +73,9 @@
     transition: border-color .15s ease, box-shadow .15s ease;
   }
   input[type="number"] { width: 11rem; font-variant-numeric: tabular-nums; }
-  input[type="number"]:focus {
+  input[type="number"].corto { width: 6.5rem; }
+  select { min-width: 12rem; }
+  input:focus, select:focus {
     outline: none;
     border-color: var(--accento);
     box-shadow: 0 0 0 3px rgba(39, 73, 214, .14);
@@ -86,10 +90,18 @@
     padding-top: 1.2rem;
     border-top: 1px solid var(--linea);
   }
+  .didascalia-profilo:first-of-type { margin-top: 1.1rem; }
   /* I campi del profilo hanno l'aspetto di input normali ma sono bloccati:
      readonly (niente grigio da disabled) e nessun focus da tastiera. */
   input[readonly] { cursor: default; field-sizing: content; }
   input[readonly]:focus { outline: none; box-shadow: none; border-color: #d3d9e3; }
+
+  .spunta { display: flex; align-items: center; gap: .5rem; padding: .55rem 0; }
+  .spunta input { width: 1.05rem; height: 1.05rem; accent-color: var(--accento); margin: 0; }
+  .spunta label { margin: 0; color: var(--inchiostro); font-weight: 500; font-size: .92rem; }
+  .aiuto { font-size: .8rem; color: var(--grigio); margin: .6rem 0 0; }
+  .aiuto a { color: inherit; }
+  #altro-comune[hidden] { display: none; }
 
   button {
     font: inherit;
@@ -133,6 +145,7 @@
   }
   .mensili { display: flex; flex-wrap: wrap; gap: .75rem 2.25rem; margin-top: .45rem; }
   .mensili .etichetta { font-size: .68rem; color: var(--grigio-chiaro); margin-bottom: .1rem; }
+  .contesto { font-size: .85rem; color: var(--grigio); margin: -.6rem 0 1.2rem; }
 
   .contenitore-tabella { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; font-size: .93rem; }
@@ -157,12 +170,18 @@
   td.negativo { color: var(--rosso); }
   td.positivo { color: var(--verde); }
 
+  .note { font-size: .8rem; color: var(--grigio); margin: 1.1rem 0 0; }
+  .note p { margin: .35rem 0; }
+  .note strong { color: var(--inchiostro); font-weight: 600; }
+
   #errore { color: var(--rosso); font-size: .9rem; margin-top: .6rem; display: none; }
 
   @media (max-width: 560px) {
     main { padding-top: 2rem; }
     .scheda { padding: 1.2rem 1.25rem; }
     .risultati-principali .valore { font-size: 1.9rem; }
+    input[type="number"], select { width: 100%; min-width: 0; }
+    form .campi > div { flex: 1 1 100%; }
   }
 </style>
 </head>
@@ -170,7 +189,8 @@
 <main>
   <h1>Calcolatore RAL → Netto</h1>
   <p class="sottotitolo">
-    Prototipo — perimetro e fonti nel README.
+    Lavoro dipendente, anno d'imposta 2026 — tutte le regioni, capoluoghi e carichi
+    familiari. Perimetro e fonti nel <a href="https://github.com/Strongmatteo33/calcolatore-ral-netto#readme">README</a>.
   </p>
 
   <div class="scheda">
@@ -184,9 +204,72 @@
       </div>
       <p id="errore"></p>
 
-      <!-- Parametri fissi del prototipo: dichiarati in vista, ma non
-           modificabili (il perimetro completo è nel README). -->
-      <p class="didascalia-profilo">Profilo di calcolo — fisso in questo prototipo</p>
+      <p class="didascalia-profilo">Territorio</p>
+      <div class="campi">
+        <div>
+          <label for="regione">Regione</label>
+          <select id="regione"></select>
+        </div>
+        <div>
+          <label for="comune">Comune (addizionale comunale)</label>
+          <select id="comune"></select>
+        </div>
+      </div>
+      <div class="campi" id="altro-comune" hidden style="margin-top: 1rem;">
+        <div>
+          <label for="altro-aliquota">Aliquota comunale (%)</label>
+          <input type="number" id="altro-aliquota" class="corto" min="0" max="1.5" step="0.01" placeholder="0,80">
+        </div>
+        <div>
+          <label for="altro-esenzione">Esenzione fino a (€ imponibile)</label>
+          <input type="number" id="altro-esenzione" min="0" step="any" placeholder="0">
+        </div>
+      </div>
+      <p class="aiuto">
+        In elenco c'è un capoluogo per regione. Per un altro comune scegli
+        "Altro comune" e copia aliquota ed esenzione dalla delibera sul
+        <a href="https://www1.finanze.gov.it/finanze2/dipartimentopolitichefiscali/fiscalitalocale/nuova_addcomirpef/sceltaregione.htm">Portale del Federalismo Fiscale</a>.
+      </p>
+
+      <p class="didascalia-profilo">Carichi familiari (art. 12 TUIR)</p>
+      <div class="campi">
+        <div class="spunta">
+          <input type="checkbox" id="coniuge">
+          <label for="coniuge">Coniuge a carico</label>
+        </div>
+      </div>
+      <div class="campi" style="margin-top: .8rem;">
+        <div>
+          <label for="figli">Figli a carico (totali)</label>
+          <input type="number" id="figli" class="corto" min="0" step="1" value="0">
+        </div>
+        <div>
+          <label for="figli-detrazione">di cui 21–29 anni o disabili</label>
+          <input type="number" id="figli-detrazione" class="corto" min="0" step="1" value="0">
+        </div>
+        <div>
+          <label for="figli-disabili">di cui disabili</label>
+          <input type="number" id="figli-disabili" class="corto" min="0" step="1" value="0">
+        </div>
+        <div>
+          <label for="percentuale-figli">Quota a tuo carico</label>
+          <select id="percentuale-figli">
+            <option value="1">100%</option>
+            <option value="0.5">50% (ripartita con l'altro genitore)</option>
+          </select>
+        </div>
+        <div>
+          <label for="ascendenti">Genitori conviventi a carico</label>
+          <input type="number" id="ascendenti" class="corto" min="0" step="1" value="0">
+        </div>
+      </div>
+      <p class="aiuto">
+        Per i figli sotto i 21 anni non spetta la detrazione IRPEF (sono coperti
+        dall'Assegno Unico, che non è calcolato qui), ma contano nel totale perché
+        alzano la soglia di reddito della detrazione per gli altri.
+      </p>
+
+      <p class="didascalia-profilo">Profilo di calcolo — fisso</p>
       <div class="campi">
         <div>
           <label for="profilo-anno">Anno d'imposta</label>
@@ -199,14 +282,6 @@
         <div>
           <label for="profilo-orario">Orario e periodo</label>
           <input type="text" id="profilo-orario" value="Full time, anno intero" size="23" readonly tabindex="-1">
-        </div>
-        <div>
-          <label for="profilo-territorio">Territorio</label>
-          <input type="text" id="profilo-territorio" value="Milano" size="8" readonly tabindex="-1">
-        </div>
-        <div>
-          <label for="profilo-carichi">Carichi e oneri</label>
-          <input type="text" id="profilo-carichi" value="Nessuno" size="8" readonly tabindex="-1">
         </div>
       </div>
     </form>
@@ -236,6 +311,7 @@
         </div>
       </div>
     </div>
+    <p class="contesto" id="contesto"></p>
 
     <div class="contenitore-tabella">
       <table>
@@ -246,6 +322,7 @@
       </table>
     </div>
 
+    <div class="note" id="note"></div>
   </div>
 </main>
 
@@ -257,6 +334,9 @@
   (function () {
     "use strict";
 
+    var P = PARAMETRI_2026;
+    var $ = function (id) { return document.getElementById(id); };
+
     var formattaEuro = new Intl.NumberFormat("it-IT", {
       style: "currency", currency: "EUR"
     }).format;
@@ -265,6 +345,82 @@
       return (importo / ral * 100).toFixed(1).replace(".", ",") + "%";
     }
 
+    // --- Popolamento dei menu di territorio -------------------------------
+    // Regioni in ordine alfabetico; per ogni regione i comuni in elenco che
+    // le appartengono, più le due voci generiche.
+    var codiciRegioni = Object.keys(P.REGIONI).sort(function (a, b) {
+      return P.REGIONI[a].nome.localeCompare(P.REGIONI[b].nome, "it");
+    });
+    codiciRegioni.forEach(function (codice) {
+      var opt = document.createElement("option");
+      opt.value = codice;
+      opt.textContent = P.REGIONI[codice].nome;
+      $("regione").appendChild(opt);
+    });
+
+    function popolaComuni() {
+      var regione = $("regione").value;
+      var select = $("comune");
+      select.textContent = "";
+      Object.keys(P.COMUNI).filter(function (c) { return P.COMUNI[c].regione === regione; })
+        .forEach(function (codice) {
+          var opt = document.createElement("option");
+          opt.value = codice;
+          opt.textContent = P.COMUNI[codice].nome;
+          select.appendChild(opt);
+        });
+      var altro = document.createElement("option");
+      altro.value = "__altro"; altro.textContent = "Altro comune…";
+      select.appendChild(altro);
+      var nessuno = document.createElement("option");
+      nessuno.value = "__nessuno"; nessuno.textContent = "Nessuna addizionale comunale";
+      select.appendChild(nessuno);
+      aggiornaAltroComune();
+    }
+    function aggiornaAltroComune() {
+      $("altro-comune").hidden = $("comune").value !== "__altro";
+    }
+    $("regione").addEventListener("change", popolaComuni);
+    $("comune").addEventListener("change", aggiornaAltroComune);
+    $("regione").value = "lombardia";
+    popolaComuni();
+
+    // --- Lettura del form in "opzioni" per calcolaNetto --------------------
+    function leggiOpzioni() {
+      var regione = $("regione").value;
+      var sceltaComune = $("comune").value;
+      var comune;
+      if (sceltaComune === "__altro") {
+        var aliquota = parseFloat($("altro-aliquota").value);
+        var esenzione = parseFloat($("altro-esenzione").value);
+        if (!isFinite(aliquota) || aliquota < 0) {
+          throw new Error("Inserisci l'aliquota comunale (in percentuale, es. 0,8).");
+        }
+        comune = {
+          nome: "Altro comune",
+          aliquota: aliquota / 100,
+          esenzione: isFinite(esenzione) && esenzione > 0 ? esenzione : 0
+        };
+      } else if (sceltaComune === "__nessuno") {
+        comune = null;
+      } else {
+        comune = sceltaComune;
+      }
+      return {
+        regione: regione,
+        comune: comune,
+        famiglia: {
+          coniugeACarico: $("coniuge").checked,
+          figliACarico: $("figli").value,
+          figliConDetrazione: $("figli-detrazione").value,
+          figliDisabili: $("figli-disabili").value,
+          percentualeFigli: parseFloat($("percentuale-figli").value),
+          ascendentiACarico: $("ascendenti").value
+        }
+      };
+    }
+
+    // --- Tabella -----------------------------------------------------------
     function riga(voce, importo, ral, opzioni) {
       // opzioni.tipo: "pietra-miliare" | "dettaglio" | "" — solo stile;
       // opzioni.segno: "-" | "+" — colore e segno davanti all'importo.
@@ -290,41 +446,69 @@
       return tr;
     }
 
+    function paragrafo(contenitore, etichetta, testo) {
+      var p = document.createElement("p");
+      var b = document.createElement("strong");
+      b.textContent = etichetta + " ";
+      p.appendChild(b);
+      p.appendChild(document.createTextNode(testo));
+      contenitore.appendChild(p);
+    }
+
     document.getElementById("modulo").addEventListener("submit", function (evento) {
       evento.preventDefault();
 
-      var errore = document.getElementById("errore");
+      var errore = $("errore");
       errore.style.display = "none";
 
-      var ral = parseFloat(document.getElementById("ral").value);
+      var ral = parseFloat($("ral").value);
       if (!isFinite(ral) || ral <= 0) {
         errore.textContent = "Inserisci una RAL positiva.";
         errore.style.display = "block";
         return;
       }
 
-      // L'interfaccia usa solo Milano; il modello resta parametrizzato
-      // (vedi PARAMETRI_2026.TERRITORI e la sezione Estendibilità del README).
-      var territorio = "milano";
-      var r = calcolaNetto(ral, territorio, PARAMETRI_2026);
+      var opzioni, r;
+      try {
+        opzioni = leggiOpzioni();
+        r = calcolaNetto(ral, opzioni, P);
+      } catch (e) {
+        errore.textContent = e.message;
+        errore.style.display = "block";
+        return;
+      }
 
-      document.getElementById("netto-annuo").textContent = formattaEuro(r.nettoAnnuo);
+      $("netto-annuo").textContent = formattaEuro(r.nettoAnnuo);
       [12, 13, 14].forEach(function (mensilita) {
-        document.getElementById("mensile-" + mensilita).textContent =
-          formattaEuro(r.nettoAnnuo / mensilita);
+        $("mensile-" + mensilita).textContent = formattaEuro(r.nettoAnnuo / mensilita);
       });
 
-      var corpo = document.getElementById("corpo-tabella");
+      var f = r.famiglia;
+      var carichi = [];
+      if (f.coniugeACarico) carichi.push("coniuge");
+      if (f.figliACarico) carichi.push(f.figliACarico + (f.figliACarico === 1 ? " figlio" : " figli") +
+        (f.figliConDetrazione ? " (" + f.figliConDetrazione + " con detrazione" + (f.percentualeFigli === 0.5 ? ", al 50%" : "") + ")" : ""));
+      if (f.ascendentiACarico) carichi.push(f.ascendentiACarico + (f.ascendentiACarico === 1 ? " genitore" : " genitori"));
+      $("contesto").textContent = r.regione + " · " + r.comune +
+        " · carichi: " + (carichi.length ? carichi.join(", ") : "nessuno");
+
+      var corpo = $("corpo-tabella");
       corpo.textContent = "";
       corpo.appendChild(riga("RAL lorda", r.ral, ral, { tipo: "pietra-miliare" }));
       corpo.appendChild(riga("Contributi INPS (9,19% + eventuale 1%)", r.contributi.totale, ral, { segno: "-" }));
       corpo.appendChild(riga("Imponibile fiscale", r.imponibile, ral, { tipo: "pietra-miliare" }));
       corpo.appendChild(riga("IRPEF lorda", r.irpefLorda, ral, { tipo: "dettaglio" }));
       corpo.appendChild(riga("Detrazione lavoro dipendente", r.detrazioneLavoro, ral, { tipo: "dettaglio" }));
+      if (r.detrazioniFamiliari.totale > 0) {
+        var df = r.detrazioniFamiliari;
+        if (df.coniuge > 0) corpo.appendChild(riga("Detrazione coniuge a carico", df.coniuge, ral, { tipo: "dettaglio" }));
+        if (df.figli > 0) corpo.appendChild(riga("Detrazione figli a carico", df.figli, ral, { tipo: "dettaglio" }));
+        if (df.ascendenti > 0) corpo.appendChild(riga("Detrazione genitori a carico", df.ascendenti, ral, { tipo: "dettaglio" }));
+      }
       corpo.appendChild(riga("Ulteriore detrazione (cuneo)", r.ulterioreDetrazione, ral, { tipo: "dettaglio" }));
       corpo.appendChild(riga("IRPEF netta", r.irpefNetta, ral, { segno: "-" }));
-      corpo.appendChild(riga("Addizionale regionale (" + PARAMETRI_2026.TERRITORI[territorio].regione + ")", r.addizionaleRegionale, ral, { segno: "-" }));
-      corpo.appendChild(riga("Addizionale comunale (" + r.territorio + ")", r.addizionaleComunale, ral, { segno: "-" }));
+      corpo.appendChild(riga("Addizionale regionale (" + r.regione + ")", r.addizionaleRegionale, ral, { segno: "-" }));
+      corpo.appendChild(riga("Addizionale comunale (" + r.comune + ")", r.addizionaleComunale, ral, { segno: "-" }));
       corpo.appendChild(riga("Somma esente (cuneo)", r.sommaEsente, ral, { segno: "+" }));
       corpo.appendChild(riga("Trattamento integrativo", r.trattamentoIntegrativo, ral, { segno: "+" }));
       corpo.appendChild(riga("Totale trattenute", r.totaleTrattenute, ral));
@@ -334,7 +518,23 @@
           r.nettoAnnuo / mensilita, ral));
       });
 
-      document.getElementById("risultati").hidden = false;
+      // Note: fonte della delibera comunale e agevolazioni regionali non
+      // modellate, così chi legge sa cosa manca.
+      var note = $("note");
+      note.textContent = "";
+      var regione = P.REGIONI[opzioni.regione];
+      if (typeof opzioni.comune === "string" && P.COMUNI[opzioni.comune].fonte) {
+        paragrafo(note, "Addizionale comunale:", P.COMUNI[opzioni.comune].fonte + ".");
+      }
+      if (regione.nonModellato) {
+        paragrafo(note, "Non calcolato per " + regione.nome + ":", regione.nonModellato);
+      }
+      if (f.figliACarico > f.figliConDetrazione) {
+        paragrafo(note, "Assegno Unico:", "per i " + (f.figliACarico - f.figliConDetrazione) +
+          " figli senza detrazione spetta l'Assegno Unico (INPS), non incluso nel netto.");
+      }
+
+      $("risultati").hidden = false;
     });
   })();
 </script>

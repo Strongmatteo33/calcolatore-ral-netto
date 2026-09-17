@@ -3,7 +3,14 @@
  *
  * Ogni voce riporta fonte e data di verifica. Nessun valore è stimato:
  * dove un dato non fosse verificabile sarebbe marcato "DA VERIFICARE".
- * Tutti i valori sono stati verificati il 18/08/2026.
+ *
+ * Date di verifica:
+ *   - contributi, IRPEF, detrazione lavoro, cuneo, trattamento integrativo:
+ *     18/08/2026;
+ *   - detrazioni per carichi di famiglia, REGIONI e COMUNI: 17/09/2026,
+ *     sugli elenchi ufficiali del Dipartimento delle Finanze (MEF), Portale
+ *     del Federalismo Fiscale, "Addizionale regionale/comunale all'IRPEF —
+ *     Aliquote applicabili", elenco 2026 in formato CSV.
  *
  * File caricato come script classico: espone l'oggetto globale PARAMETRI_2026.
  */
@@ -72,6 +79,70 @@ var PARAMETRI_2026 = {
   },
 
   // ---------------------------------------------------------------------
+  // Detrazioni per carichi di famiglia (art. 12 co. 1 TUIR)
+  // Fonte: art. 12 TUIR nel testo vigente al 2026, come modificato da
+  // L. 207/2024 (art. 1 co. 11: figli solo da 21 a 29 anni salvo disabilità;
+  // altri familiari limitati agli ascendenti conviventi) e D.Lgs. 192/2025
+  // (co. 4-ter). Nessuna modifica dalla L. 199/2025. Verificato il 17/09/2026.
+  // Il "reddito complessivo" delle formule coincide, nel perimetro di
+  // questo calcolatore, con l'imponibile fiscale.
+  // Regola dei quozienti (co. 4): si assumono le prime quattro cifre
+  // decimali; quoziente ≤ 0 → nessuna detrazione; quoziente = 1 (coniuge)
+  // → 690 €.
+  // ---------------------------------------------------------------------
+  detrazioniFamiliari: {
+    coniuge: {
+      // RC ≤ 15.000: 800 − 110 × (RC / 15.000)
+      fascia1: { sogliaMax: 15000, base: 800, decremento: 110, denominatore: 15000 },
+      // 15.000 < RC ≤ 40.000: 690 € fissi (più maggiorazione per fascia)
+      fascia2: { sogliaMax: 40000, importo: 690 },
+      // 40.000 < RC ≤ 80.000: 690 × (80.000 − RC) / 40.000; oltre: zero
+      fascia3: { sogliaMax: 80000, base: 690, denominatore: 40000 },
+      // Maggiorazioni (co. 1 lett. b): importi fissi per fasce strette.
+      // Gli estremi sono "superiore a … e fino a …".
+      maggiorazioni: [
+        { oltre: 29000, finoA: 29200, importo: 10 },
+        { oltre: 29200, finoA: 34700, importo: 20 },
+        { oltre: 34700, finoA: 35000, importo: 30 },
+        { oltre: 35000, finoA: 35100, importo: 20 },
+        { oltre: 35100, finoA: 35200, importo: 10 }
+      ]
+    },
+
+    figli: {
+      // 950 € per ciascun figlio a carico di età ≥ 21 anni e < 30 anni,
+      // oppure di qualsiasi età se con disabilità (L. 104/1992).
+      // Per i figli < 21 anni non spetta: sono coperti dall'Assegno Unico
+      // (D.Lgs. 230/2021), che è fuori dal perimetro di questo calcolatore.
+      importoBase: 950,
+      maggiorazioneDisabile: 400,           // → 1.350 € per figlio disabile
+      etaMin: 21,
+      etaMaxEsclusa: 30,
+      // Formula: importo × (B − RC) / B, con B = 95.000 + 15.000 × (n − 1).
+      // INTERPRETAZIONE ADOTTATA (DA VERIFICARE su una fonte ufficiale):
+      // n è il numero complessivo di figli fiscalmente a carico, compresi
+      // quelli sotto i 21 anni per cui la detrazione non spetta. Le fonti
+      // consultate il 17/09/2026 divergono: alcune riportano la formula
+      // delle istruzioni 730 ("più figli che danno diritto alla
+      // detrazione"), altre la lettura della Circ. AE 4/E/2022 (rilevano
+      // anche i minori di 21 anni). Chi preferisce la lettura restrittiva
+      // indica in figliACarico solo i figli con detrazione: il motore non
+      // impone nulla.
+      redditoBase: 95000,
+      incrementoPerFiglioSuccessivo: 15000
+    },
+
+    // Altri familiari a carico: dal 2025 solo gli ascendenti conviventi.
+    // 750 × (80.000 − RC) / 80.000, ripartita pro quota tra gli aventi diritto.
+    ascendenti: { importo: 750, redditoAzzeramento: 80000 },
+
+    // Limiti di reddito del familiare per essere "a carico" (co. 2).
+    // Servono solo alla documentazione: il calcolatore chiede all'utente
+    // il numero di familiari già qualificati come a carico.
+    limitiRedditoFamiliare: { generale: 2840.51, figliFinoA24Anni: 4000 }
+  },
+
+  // ---------------------------------------------------------------------
   // Cuneo fiscale (art. 1 co. 4-9 L. 207/2024, misura strutturale;
   // invariata dalla L. 199/2025). Meccanismo operativo: Circolare AE
   // n. 4/E del 16/05/2025. Verificato il 18/08/2026.
@@ -124,22 +195,74 @@ var PARAMETRI_2026 = {
   },
 
   // ---------------------------------------------------------------------
-  // Territori. Aggiungere un territorio = aggiungere una entry qui:
-  // la logica di calcolo non cambia.
-  // Le addizionali si applicano sull'imponibile IRPEF e sono dovute solo
-  // se per l'anno risulta dovuta l'IRPEF al netto delle detrazioni
-  // (art. 50 co. 2 D.Lgs. 446/1997; art. 1 D.Lgs. 360/1998).
+  // REGIONI — addizionale regionale all'IRPEF, anno d'imposta 2026.
+  //
+  // Fonte unica: elenco 2026 del Portale del Federalismo Fiscale (MEF),
+  // "Addizionale regionale all'IRPEF — Aliquote applicabili", CSV
+  // scaricato e verificato il 17/09/2026. Tra parentesi la data di
+  // pubblicazione MEF di ciascuna scheda e la norma regionale citata.
+  //
+  // Meccanica comune (art. 6 co. 1 D.Lgs. 68/2011): le aliquote
+  // differenziate si applicano per scaglioni progressivi, con gli stessi
+  // limiti degli scaglioni IRPEF (15.000 / 28.000 / 50.000). Le clausole
+  // aggiuntive sono descritte da questi campi, tutti opzionali:
+  //   esenzione               imponibile ≤ soglia → addizionale zero
+  //   aliquotaUnicaSottoSoglia imponibile ≤ soglia → aliquota su TUTTO
+  //                            l'imponibile (non a scaglioni)
+  //   detrazioni[]            importo fisso sottratto se oltre < imp ≤ finoA
+  //                            (omettere "oltre" o "finoA" per lasciare
+  //                            l'estremo aperto)
+  //   detrazioneProgressiva   importo × (imp − oltre) / denominatore,
+  //                            con tetto "massimo", se imp > oltre
+  // Nessuna clausola può generare un credito: il risultato ha floor a 0.
+  //
+  // Le agevolazioni legate a figli, disabilità o altre condizioni
+  // soggettive NON sono modellate e sono elencate in "nonModellato" per
+  // trasparenza (vedi README, "Cosa non è modellato").
   // ---------------------------------------------------------------------
-  TERRITORI: {
+  REGIONI: {
 
-    milano: {
-      nome: "Milano",
-      regione: "Lombardia",
+    valle_aosta: {
+      nome: "Valle d'Aosta",
+      // MEF 19/01/2026 — art. 1 L.R. 29 del 23/12/2025.
+      // Reddito complessivo ≤ 15.000 € esente; sopra, 1,23% sull'intero
+      // imponibile.
+      regionale: {
+        scaglioni: [{ fino: Infinity, aliquota: 0.0123 }],
+        esenzione: 15000
+      }
+    },
 
-      // Addizionale regionale Lombardia: a scaglioni progressivi.
-      // Fonte: art. 72 L.R. Lombardia 10/2003, mod. L.R. 5/2022; nessuna
-      // nuova delibera per il 2026 (proroga automatica). Verificato il
-      // 18/08/2026 sulla pagina istituzionale di Regione Lombardia.
+    piemonte: {
+      nome: "Piemonte",
+      // MEF 29/01/2026 — L.R. 4 del 28/03/2022; L.R. 16 del 06/08/2025.
+      regionale: {
+        scaglioni: [
+          { fino: 15000,    aliquota: 0.0162 },
+          { fino: 28000,    aliquota: 0.0268 },
+          { fino: 50000,    aliquota: 0.0331 },
+          { fino: Infinity, aliquota: 0.0333 }
+        ]
+      },
+      nonModellato: "Detrazione di 100 € per figlio per contribuenti con più di due figli a carico; 500 € per ciascun figlio con disabilità (L. 104/1992)."
+    },
+
+    liguria: {
+      nome: "Liguria",
+      // MEF 28/01/2026 — L.R. 17 del 09/10/2024 art. 2-bis, mod. L.R. 3 del
+      // 31/03/2025; L.R. 3 del 17/03/2022 art. 1.
+      regionale: {
+        scaglioni: [
+          { fino: 28000,    aliquota: 0.0123 },
+          { fino: 50000,    aliquota: 0.0318 },
+          { fino: Infinity, aliquota: 0.0323 }
+        ]
+      }
+    },
+
+    lombardia: {
+      nome: "Lombardia",
+      // MEF 28/01/2026 — art. 72 co. 1 L.R. 10 del 14/07/2003.
       // (L'"aliquota unica 1,23%" riportata da alcune fonti è errata:
       // 1,23% è solo il primo scaglione.)
       regionale: {
@@ -149,47 +272,305 @@ var PARAMETRI_2026 = {
           { fino: 50000,    aliquota: 0.0172 },
           { fino: Infinity, aliquota: 0.0173 }
         ]
-      },
-
-      // Addizionale comunale Milano: 0,80%, esenzione totale fino a
-      // 23.000 € di imponibile (sopra la soglia si paga sull'intero
-      // imponibile, non è una franchigia). Soglia a 23.000 € dal 2020
-      // (Delib. C.C. n. 46 del 28/09/2020, mai modificata; il valore
-      // 21.000 € circolante è pre-2020). Verificato il 18/08/2026 sul
-      // Portale del Federalismo Fiscale (MEF).
-      aliquotaComunale: 0.008,
-      esenzioneComunale: 23000
+      }
     },
-    // Esempio per altri comuni:
-    // Crescendo conviene trattare le regioni come ente assestante rispetto
-    // al comune per non dover ripetere le regioni per ogni comune.
-    roma: {
-      nome: "Roma",
-      regione: "Lazio",
 
-      // Addizionale regionale Lazio 2026: struttura NUOVA rispetto al 2025
-      // (L.R. Lazio n. 20 del 31/12/2025, art. 2). Due scaglioni:
-      // 1,73% fino a 15.000 e 3,33% oltre, con due clausole di favore:
-      // - imponibile ≤ 28.000 → 1,73% sull'intero imponibile;
-      // - imponibile 28.001–30.000 → detrazione di 60 € dall'addizionale.
-      // Verificato il 18/08/2026 sul testo di legge regionale.
+    trento: {
+      nome: "Provincia autonoma di Trento",
+      // MEF 22/01/2026 — art. 1 co. 2-quater, 2-sexies e 3-bis L.P. 13 del
+      // 23/12/2019, mod. L.P. 11 del 29/12/2025.
+      // Deduzione di 30.000 € per imponibili ≤ 30.000 €: equivale a
+      // un'esenzione totale sotto quella soglia.
+      regionale: {
+        scaglioni: [
+          { fino: 50000,    aliquota: 0.0123 },
+          { fino: Infinity, aliquota: 0.0173 }
+        ],
+        esenzione: 30000
+      },
+      nonModellato: "Detrazione di 246 € per ogni figlio a carico (art. 12 co. 2 TUIR) per imponibili ≤ 50.000 €."
+    },
+
+    bolzano: {
+      nome: "Provincia autonoma di Bolzano",
+      // MEF 29/01/2026 — art. 21-sexiesdecies L.P. 9 del 11/08/1998.
+      // a) detrazione 430,50 € per imponibili ≤ 90.000 €;
+      // b) per imponibili > 50.000 €: 125 × (imp − 50.000) / 25.000, max 125 €.
+      // Cumulabili, senza credito d'imposta.
+      regionale: {
+        scaglioni: [
+          { fino: 50000,    aliquota: 0.0123 },
+          { fino: Infinity, aliquota: 0.0173 }
+        ],
+        detrazioni: [{ finoA: 90000, importo: 430.5 }],
+        detrazioneProgressiva: { oltre: 50000, importo: 125, denominatore: 25000, massimo: 125 }
+      },
+      nonModellato: "Detrazione di 340 € per ogni figlio a carico (anche < 21 e > 30 anni) per imponibili ≤ 90.000 €."
+    },
+
+    veneto: {
+      nome: "Veneto",
+      // MEF 22/01/2026 — art. 1 co. 5 L.R. 19/2005, mod. art. 9 L.R. 30/2022.
+      regionale: {
+        scaglioni: [{ fino: Infinity, aliquota: 0.0123 }]
+      },
+      nonModellato: "Aliquota agevolata 0,90% per contribuenti disabili o con familiare disabile a carico, con imponibile ≤ 50.000 €."
+    },
+
+    friuli_venezia_giulia: {
+      nome: "Friuli-Venezia Giulia",
+      // MEF 19/01/2026 — art. 1 co. 5 L.R. 14 del 25/07/2012; art. 1 co. 727
+      // L. 207/2024. Imponibile ≤ 15.000 €: 0,70% sull'intero importo;
+      // oltre: 1,23% sull'intero importo.
+      regionale: {
+        scaglioni: [{ fino: Infinity, aliquota: 0.0123 }],
+        aliquotaUnicaSottoSoglia: { soglia: 15000, aliquota: 0.0070 }
+      }
+    },
+
+    emilia_romagna: {
+      nome: "Emilia-Romagna",
+      // MEF 19/01/2026 — art. 2 L.R. 19 del 20/12/2006, mod. art. 2 co. 1
+      // L.R. 1 del 31/03/2025, coordinata con L.R. 9 del 25/07/2025.
+      regionale: {
+        scaglioni: [
+          { fino: 15000,    aliquota: 0.0133 },
+          { fino: 28000,    aliquota: 0.0193 },
+          { fino: 50000,    aliquota: 0.0278 },
+          { fino: Infinity, aliquota: 0.0333 }
+        ]
+      }
+    },
+
+    toscana: {
+      nome: "Toscana",
+      // MEF 30/01/2026 — art. 1 L.R. 48 del 28/12/2023.
+      regionale: {
+        scaglioni: [
+          { fino: 15000,    aliquota: 0.0142 },
+          { fino: 28000,    aliquota: 0.0143 },
+          { fino: 50000,    aliquota: 0.0332 },
+          { fino: Infinity, aliquota: 0.0333 }
+        ]
+      }
+    },
+
+    umbria: {
+      nome: "Umbria",
+      // MEF 19/01/2026 — art. 1 L.R. 2 del 11/04/2025.
+      // Per imponibili ≤ 28.000 € le maggiorazioni dei primi due scaglioni
+      // non si applicano: resta l'aliquota base 1,23% sull'intero
+      // imponibile. Per 28.001–50.000 €: scaglioni pieni meno 150 €.
+      regionale: {
+        scaglioni: [
+          { fino: 15000,    aliquota: 0.0173 },
+          { fino: 28000,    aliquota: 0.0302 },
+          { fino: 50000,    aliquota: 0.0312 },
+          { fino: Infinity, aliquota: 0.0333 }
+        ],
+        aliquotaUnicaSottoSoglia: { soglia: 28000, aliquota: 0.0123 },
+        detrazioni: [{ oltre: 28000, finoA: 50000, importo: 150 }]
+      }
+    },
+
+    marche: {
+      nome: "Marche",
+      // MEF 22/01/2026 — art. 1 L.R. 5 del 23/03/2022; art. 1 co. 728 L. 207/2024.
+      regionale: {
+        scaglioni: [
+          { fino: 15000,    aliquota: 0.0123 },
+          { fino: 28000,    aliquota: 0.0153 },
+          { fino: 50000,    aliquota: 0.0170 },
+          { fino: Infinity, aliquota: 0.0173 }
+        ]
+      },
+      nonModellato: "Aliquota 1,23% sull'intero imponibile (≤ 50.000 €) per contribuenti con figli disabili a carico."
+    },
+
+    lazio: {
+      nome: "Lazio",
+      // MEF 22/01/2026 — L.R. 20 del 31/12/2025, art. 2. Due scaglioni
+      // (1,73% fino a 15.000, 3,33% oltre) con due clausole di favore:
+      // imponibile ≤ 28.000 → 1,73% sull'intero imponibile;
+      // imponibile 28.001–30.000 → detrazione di 60 €.
       regionale: {
         scaglioni: [
           { fino: 15000,    aliquota: 0.0173 },
           { fino: Infinity, aliquota: 0.0333 }
         ],
         aliquotaUnicaSottoSoglia: { soglia: 28000, aliquota: 0.0173 },
-        detrazionePerFascia: { oltre: 28000, finoA: 30000, importo: 60 }
-      },
+        detrazioni: [{ oltre: 28000, finoA: 30000, importo: 60 }]
+      }
+    },
 
-      // Addizionale comunale Roma: 0,90% (0,5% ordinario + 0,4% gestione
-      // commissariale), esenzione totale fino a 14.000 € di imponibile.
-      // Soglia a 14.000 € dal 2025 (Delib. A.C. n. 186 del 19/12/2024;
-      // il valore 12.000 € circolante è pre-2025). Verificato il
-      // 18/08/2026 su Roma Capitale e Portale del Federalismo Fiscale.
-      aliquotaComunale: 0.009,
-      esenzioneComunale: 14000
+    abruzzo: {
+      nome: "Abruzzo",
+      // MEF 28/01/2026 — art. 1 co. 8 L.R. 44 del 12/12/2006; art. 1 co. 1
+      // L.R. 9 del 04/04/2025.
+      regionale: {
+        scaglioni: [
+          { fino: 28000,    aliquota: 0.0167 },
+          { fino: 50000,    aliquota: 0.0287 },
+          { fino: Infinity, aliquota: 0.0333 }
+        ]
+      }
+    },
+
+    molise: {
+      nome: "Molise",
+      // MEF 19/06/2026 (scheda n. 2227, che sostituisce la n. 2186 del
+      // 29/01/2026) — art. 2 L.R. 9/2013; art. 1 co. 174 L. 311/2004
+      // (maggiorazione automatica per disavanzo sanitario); L.R. 5 del
+      // 15/12/2023. Il 3,63% supera il tetto ordinario del 3,33% proprio
+      // per effetto della maggiorazione da piano di rientro.
+      regionale: {
+        scaglioni: [
+          { fino: 15000,    aliquota: 0.0203 },
+          { fino: 28000,    aliquota: 0.0223 },
+          { fino: Infinity, aliquota: 0.0363 }
+        ]
+      }
+    },
+
+    campania: {
+      nome: "Campania",
+      // MEF 29/01/2026 — L.R. 4 del 16/01/2014; L.R. 31 del 28/12/2021;
+      // L.R. 7 del 30/03/2022.
+      regionale: {
+        scaglioni: [
+          { fino: 15000,    aliquota: 0.0173 },
+          { fino: 28000,    aliquota: 0.0296 },
+          { fino: 50000,    aliquota: 0.0320 },
+          { fino: Infinity, aliquota: 0.0333 }
+        ]
+      },
+      nonModellato: "Per imponibili ≤ 28.000 €: detrazione di 30 € per figlio con almeno due figli a carico; 40 € per ogni figlio disabile a carico."
+    },
+
+    puglia: {
+      nome: "Puglia",
+      // MEF 29/05/2026 (scheda n. 2207, che sostituisce la n. 2178 del
+      // 28/01/2026) — Decreto n. 3 del 28/05/2026 del Presidente della
+      // Regione quale Commissario ad acta (art. 1 co. 174 L. 311/2004):
+      // aliquote rideterminate per il disavanzo sanitario 2025.
+      regionale: {
+        scaglioni: [
+          { fino: 15000,    aliquota: 0.0133 },
+          { fino: 28000,    aliquota: 0.0213 },
+          { fino: 50000,    aliquota: 0.0323 },
+          { fino: Infinity, aliquota: 0.0333 }
+        ]
+      },
+      nonModellato: "Detrazione di 20 € per figlio per contribuenti con più di tre figli a carico, +375 € per ogni figlio disabile (art. 3 L.R. 40/2015)."
+    },
+
+    basilicata: {
+      nome: "Basilicata",
+      // MEF 29/01/2026 — art. 6 D.Lgs. 68/2011; art. 50 D.Lgs. 446/1997.
+      regionale: {
+        scaglioni: [{ fino: Infinity, aliquota: 0.0123 }]
+      }
+    },
+
+    calabria: {
+      nome: "Calabria",
+      // MEF 29/01/2026 — art. 1 L.R. 30 del 07/08/2002, mod. L.R. 1 del
+      // 11/01/2006; art. 29 co. 14 D.L. 216/2011.
+      regionale: {
+        scaglioni: [{ fino: Infinity, aliquota: 0.0173 }]
+      }
+    },
+
+    sicilia: {
+      nome: "Sicilia",
+      // MEF 29/01/2026 — art. 1 L.R. 12 del 02/05/2007; art. 1 co. 10-quater
+      // L.R. 4 del 09/02/2015; art. 8 L.R. 15 del 11/08/2017.
+      regionale: {
+        scaglioni: [{ fino: Infinity, aliquota: 0.0123 }]
+      }
+    },
+
+    sardegna: {
+      nome: "Sardegna",
+      // MEF 29/01/2026 — art. 2 co. 1 e 1-bis L.R. 48/2018; art. 1 L.R. 13
+      // del 11/07/2022.
+      regionale: {
+        scaglioni: [{ fino: Infinity, aliquota: 0.0123 }]
+      },
+      nonModellato: "Detrazione di 200 € per ogni figlio minorenne a carico (+100 € se disabile) per imponibili ≤ 50.000 €."
     }
+  },
+
+  // ---------------------------------------------------------------------
+  // COMUNI — addizionale comunale all'IRPEF, anno d'imposta 2026.
+  // Un capoluogo per regione (per Trentino-Alto Adige: Trento e Bolzano).
+  //
+  // Fonte unica: elenchi 2019–2026 del Portale del Federalismo Fiscale
+  // (MEF), "Addizionale comunale all'IRPEF — Aliquote applicabili", CSV
+  // scaricati e verificati il 17/09/2026. Dove il comune non ha adottato
+  // una nuova delibera per il 2026 vale l'ultima delibera pubblicata
+  // (art. 1 co. 169 L. 296/2006: proroga automatica); la delibera citata
+  // è quella in vigore.
+  //
+  // Campi:
+  //   aliquota    aliquota unica sull'intero imponibile, oppure
+  //   scaglioni   aliquote per scaglioni progressivi (art. 1 co. 11
+  //               D.L. 138/2011: stessi limiti degli scaglioni IRPEF)
+  //   esenzione   imponibile ≤ soglia → addizionale zero. È un'esenzione
+  //               TOTALE, non una franchigia: sopra la soglia si paga
+  //               sull'intero imponibile. Zero = nessuna esenzione.
+  //   applica     false se il comune non applica l'addizionale
+  //
+  // Per un comune non in elenco l'interfaccia permette di inserire
+  // aliquota ed esenzione a mano ("Altro comune").
+  // ---------------------------------------------------------------------
+  COMUNI: {
+    aosta:      { nome: "Aosta",      regione: "valle_aosta",           aliquota: 0.005,  esenzione: 9999.99,
+                  fonte: "Delib. C.C. n. 32 del 17/03/2021 (confermata 2025; nessuna nuova delibera 2026)" },
+    torino:     { nome: "Torino",     regione: "piemonte",              esenzione: 11790,
+                  scaglioni: [{ fino: 28000, aliquota: 0.008 }, { fino: 50000, aliquota: 0.011 }, { fino: Infinity, aliquota: 0.012 }],
+                  fonte: "Delib. C.C. n. 195 del 29/03/2022 (confermata 2025 ex art. 1 co. 751 L. 207/2024; nessuna nuova delibera 2026)" },
+    milano:     { nome: "Milano",     regione: "lombardia",             aliquota: 0.008,  esenzione: 23000,
+                  fonte: "Delib. C.C. n. 46 del 28/09/2020 (confermata 2025; nessuna nuova delibera 2026). Il valore 21.000 € circolante è pre-2020." },
+    trento:     { nome: "Trento",     regione: "trento",                applica: false,
+                  fonte: "Nessuna delibera in elenco MEF 2019–2026: il comune non applica l'addizionale" },
+    bolzano:    { nome: "Bolzano",    regione: "bolzano",               applica: false,
+                  fonte: "Delib. n. 100 del 27/10/2016, \"non applica\" (confermata 2025)" },
+    venezia:    { nome: "Venezia",    regione: "veneto",                aliquota: 0.008,  esenzione: 10000,
+                  fonte: "Delib. C.C. n. 67 del 20/12/2023 (confermata 2025; nessuna nuova delibera 2026)" },
+    trieste:    { nome: "Trieste",    regione: "friuli_venezia_giulia", aliquota: 0.008,  esenzione: 12500,
+                  fonte: "Delib. C.C. n. 33 del 03/08/2015 (confermata 2025; nessuna nuova delibera 2026)" },
+    genova:     { nome: "Genova",     regione: "liguria",               esenzione: 14000,
+                  scaglioni: [{ fino: 28000, aliquota: 0.010 }, { fino: 50000, aliquota: 0.011 }, { fino: Infinity, aliquota: 0.012 }],
+                  fonte: "Delib. C.C. n. 55 del 19/12/2024 (nessuna nuova delibera 2026)" },
+    bologna:    { nome: "Bologna",    regione: "emilia_romagna",        aliquota: 0.008,  esenzione: 15000,
+                  fonte: "Delib. C.C. n. 354/2016 del 22/12/2016 (confermata 2025; nessuna nuova delibera 2026)" },
+    firenze:    { nome: "Firenze",    regione: "toscana",               aliquota: 0.002,  esenzione: 25000,
+                  fonte: "Delib. C.C. n. 47 del 28/07/2014 (confermata 2025; nessuna nuova delibera 2026)" },
+    perugia:    { nome: "Perugia",    regione: "umbria",                aliquota: 0.008,  esenzione: 12500,
+                  fonte: "Delib. C.C. n. 110 del 25/11/2013 (confermata 2025; nessuna nuova delibera 2026). Esenzione riferita al reddito complessivo art. 8 TUIR" },
+    ancona:     { nome: "Ancona",     regione: "marche",                aliquota: 0.008,  esenzione: 0,
+                  fonte: "Delib. C.C. n. 176 del 21/12/2007 (confermata 2025; nessuna nuova delibera 2026)" },
+    roma:       { nome: "Roma",       regione: "lazio",                 aliquota: 0.009,  esenzione: 14000,
+                  fonte: "Delib. A.C. n. 186 del 19/12/2024 (nessuna nuova delibera 2026). 0,9% = 0,5% ordinario + 0,4% gestione commissariale; il valore 12.000 € circolante è pre-2025" },
+    laquila:    { nome: "L'Aquila",   regione: "abruzzo",               aliquota: 0.006,  esenzione: 15000,
+                  fonte: "Delib. C.C. n. 17 del 03/03/2008 (confermata 2025; nessuna nuova delibera 2026)" },
+    campobasso: { nome: "Campobasso", regione: "molise",                aliquota: 0.008,  esenzione: 0,
+                  fonte: "Delib. C.C. n. 42 del 29/12/2023 (confermata 2025; nessuna nuova delibera 2026)" },
+    napoli:     { nome: "Napoli",     regione: "campania",              aliquota: 0.010,  esenzione: 12000,
+                  fonte: "Delib. C.C. n. 143 del 29/12/2023 (confermata 2025; nessuna nuova delibera 2026)" },
+    bari:       { nome: "Bari",       regione: "puglia",                aliquota: 0.008,  esenzione: 15000,
+                  fonte: "Delib. C.C. n. 42 del 31/07/2012 (confermata 2025; nessuna nuova delibera 2026)" },
+    potenza:    { nome: "Potenza",    regione: "basilicata",            esenzione: 0,
+                  scaglioni: [{ fino: 50000, aliquota: 0.008 }, { fino: Infinity, aliquota: 0.010 }],
+                  fonte: "Delib. C.C. n. 12 del 11/03/2025 (nessuna nuova delibera 2026)" },
+    catanzaro:  { nome: "Catanzaro",  regione: "calabria",              aliquota: 0.008,  esenzione: 0,
+                  fonte: "Delib. C.C. n. 51 del 30/07/2015 (confermata 2025; nessuna nuova delibera 2026)" },
+    palermo:    { nome: "Palermo",    regione: "sicilia",               aliquota: 0.0103, esenzione: 0,
+                  fonte: "Delib. n. 137 del 15/04/2026 (aliquota maggiorata ex piano di riequilibrio; 2025: 1,014%)" },
+    cagliari:   { nome: "Cagliari",   regione: "sardegna",              esenzione: 10000,
+                  scaglioni: [{ fino: 15000, aliquota: 0.0066 }, { fino: 28000, aliquota: 0.0072 }, { fino: 50000, aliquota: 0.0078 }, { fino: Infinity, aliquota: 0.008 }],
+                  fonte: "Delib. C.C. n. 69 del 30/05/2022 (confermata 2025 ex art. 1 co. 751 L. 207/2024; nessuna nuova delibera 2026)" }
   }
 };
 
