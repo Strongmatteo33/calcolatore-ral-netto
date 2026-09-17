@@ -202,3 +202,7 @@ test.js             casi di prova e controlli automatici
 Strumento di stima, non consulenza fiscale. Il netto reale dipende dal CCNL,
 dalla busta paga effettiva e da situazioni personali che non sono modellate.
 Confronta sempre con il cedolino o con un professionista.
+
+## Licenza
+
+MIT — vedi [LICENSE](LICENSE).

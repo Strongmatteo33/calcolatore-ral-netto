@@ -12,6 +12,7 @@
     "url": "git+https://github.com/Strongmatteo33/calcolatore-ral-netto.git"
   },
   "author": "Strongmatteo33",
+  "license": "MIT",
   "engines": {
     "node": ">=14"
   }
