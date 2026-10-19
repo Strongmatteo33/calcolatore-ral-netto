@@ -1,0 +1,16 @@
+services:
+  backend:
+    build: ./backend
+    container_name: calcolatore-backend
+    restart: unless-stopped
+    expose:
+      - "3001"
+
+  frontend:
+    build: ./frontend
+    container_name: calcolatore-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+
+coverage/
+
+.vite/
+vite.svg
+
+.env
+.env.*
+!.env.example
